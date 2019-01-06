@@ -27,6 +27,17 @@ class urlResponse():
                     return None
         except RequestException as e:
             print("Error, shrug")
+class FileHandler():
+    def __init__(self, path=None):
+        self.path = path
+    def is_open(self):
+        try:
+            if self.path != None:
+                fh = open(self.path, 'r')
+                fh.close()
+                return True
+        except FileNotFoundError or self.path == None:
+            return False
 
 class AppleMusicPlayist():
     # cached feature to use the json file created so you don't have to keep sending requests to the site
@@ -34,28 +45,23 @@ class AppleMusicPlayist():
         self.sendAppleRequest = True
         self.url = url
         self.cachedJSON = cachedJSON
+        self.filehandler = FileHandler(cachedJSON)
 
         # if we have something passed (filepath), we need to check if it is accessible
-        try:
-            if cachedJSON != None:
-                fh = open(cachedJSON, 'r')
-                self.sendAppleRequest = False
-                fh.close()
-        except FileNotFoundError or cachedJSON == None:
-            # if not , we need to specify a new location but also send it over to send a request to Apple
+        if(self.filehandler.is_open()):
+            sendAppleRequest = False
+            self.loadjson(cachedJSON)
+        else:
             self.cachedJSON = self.title + ".json"
-        self.loadjson(cachedJSON)
-
         self.manifest = {}
 
-        if self.sendAppleRequest:
+        # check to see if we need to contact Apple's Website and retrieve data
+        if self.sendAppleRequest and self.url != None:
             self.bot = urlResponse(self.url)
             self.html = BeautifulSoup(self.bot.getUrl(self.url), 'html.parser')
             self.manifest = dict(zip(self.artists(), self.songs()))
         else:
-            print("loading json")
             self.loadjson(cachedJSON)
-            print(self.manifest)
 
     # functions that do the work
     def artists(self):
@@ -65,7 +71,7 @@ class AppleMusicPlayist():
         else:
             return []
     def songs(self):
-        if self.sendAppleRequest:
+        if self.sendAppleRequest and self.url != None:
             raw_songs = self.html.find_all("a", {"class": "tracklist-item__text__link targeted-link targeted-link--no-monochrome-underline"})
             parsed_songs = []
             for i in raw_songs:
@@ -75,7 +81,7 @@ class AppleMusicPlayist():
             return parsed_songs
         return []
     def title(self):
-        if self.sendAppleRequest:
+        if self.sendAppleRequest and self.url != None:
             return(self.html.find("h1", {"class": "product-header__title"}).text)
         return "placeholder string"
     def loadjson(self, path):
@@ -117,5 +123,5 @@ def jsontest():
         print(artist)
     print("Number of songs: ", playlist.songCount())
     print("Number of artists: ", playlist.artistCount())
-unit()
+# unit()
 jsontest()

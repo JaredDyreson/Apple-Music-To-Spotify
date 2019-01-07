@@ -8,7 +8,8 @@ from  bs4 import BeautifulSoup
 import urllib.parse
 import datetime
 import SQLite
-
+import json
+from pprint import pprint as p
 class SpotifyPlaylist():
     def __init__(self, name=None, url=None):
         self.name = name
@@ -56,7 +57,11 @@ class SpotifyPlaylist():
         # Committing changes and closing the connection to the database file
         conn.commit()
         conn.close()
-
+    def jsondatabase(self, path):
+        jsonfile = open(path)
+        jsonstr = jsonfile.read()
+        test = json.loads(jsonstr)
+        p(test)
 a = SpotifyPlaylist()
-data = SQLite.database("hello.sqlite")
+a.jsondatabase('tokens.json')
 # a.genDatabase()

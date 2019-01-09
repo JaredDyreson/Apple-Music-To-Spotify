@@ -1,67 +1,96 @@
 #!/usr/bin/env python3.5
 
 # big thanks to this github repo https://github.com/mileshenrichs/spotify-playlist-generator/blob/master/generate.py
-
+# how to get this program off the ground -> https://gist.github.com/iannase/38427b791a860a1f791b5fbba1791592
 import sqlite3
 import requests
 from  bs4 import BeautifulSoup
 import urllib.parse
 import datetime
-import SQLite
 import json
-from pprint import pprint as p
+
+import spotipy
+import spotipy.util as util
+from spotipy.oauth2 import SpotifyClientCredentials
+
+from subprocess import call
+import pprint
+import AppleMusic
+
+class jsonparser():
+    def __init__(self, path=None):
+        self.path = path
+        self.jsondata = self.jsondatabase(self.path)
+        self.keys = self.keysindata()
+    def jsondatabase(self, path):
+        jsonfile = open(path)
+        jsonstr = jsonfile.read()
+        return json.loads(jsonstr)
+    def amountoftokens(self):
+        return len(self.jsondata)
+    # def appendtojson(self, jsondata):
+    def keysindata(self):
+        return [key for value, key in self.jsondata.items()]
+    def getjsonkey(self, key):
+        return self.jsondata[key]
+
 class SpotifyPlaylist():
     def __init__(self, name=None, url=None):
         self.name = name
         self.url = url
-    def getAccessToken(self, database, connection):
-        database.execute("SELECT value FROM tokens WHERE token_type = 'encoded_basic_token'")
-        basicToken = database.fetchone()[0]
-        database.execute("SELECT value FROM tokens WHERE token_type = 'refresh_token'")
-        refreshToken = database.fetchone()[0]
-        reqHeader = {'Authorization': 'Basic {}'.format(basicToken)}
-        reqBody = {'grant_type': 'refresh_token', 'refresh_token': refreshToken}
-        r = requests.post('https://accounts.spotify.com/api/token', headers=reqHeader, data=reqBody)
-        resJson = r.json()
+        self.parser = jsonparser("config.json")
 
-        newToken = resJson['access_token']
-        # update token in db
-        database.execute("UPDATE tokens SET value = ? WHERE token_type = 'access_token'", (newToken,))
-        connection.commit()
-        return newToken
+        self.username = self.parser.getjsonkey("username")
+        self.secret = self.parser.getjsonkey("secret")
+        self.client = self.parser.getjsonkey("client_id")
+        client_credentials_manager = SpotifyClientCredentials(client_id=self.client, client_secret=self.secret)
+        self.spotipyobj = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+        token = util.prompt_for_user_token(username=self.username, scope='playlist-modify playlist-modify-private', client_id=self.client, client_secret=self.secret)
+        self.spotipyPlaylist = spotipy.Spotify(auth=token)
+    def playlistexists(self, name):
+        # introduce logic to test for existence of playlist
+        return True
+    def getAccessToken(self):
+        basicToken = self.parser.getjsonkey("encoded_basic_token")
+        refreshToken = self.parser.getjsonkey("refresh_token")
 
-    def genDatabase(self, token=None):
-        # learning how to operate on SQLITE Files -> https://sebastianraschka.com/Articles/2014_sqlite_in_python_tutorial.html
-        sqlite_file = 'script.sqlite'    # name of the sqlite database file
-        table_name1 = 'tokens'  # name of the table to be created
-        table_name2 = 'jared'
-        new_field = 'token_type' # name of the column
-        field_type_one = 'encoded_basic_token'  # column data type
-        field_type_two = 'access_token'
-        field_type_three = 'refresh_token'
-        id_column = 'my_1st_column'
-        column_name = 'my_2nd_column'
-
-        # Connecting to the database file
-        conn = sqlite3.connect(sqlite_file)
-        c = conn.cursor()
-
-        # Creating a new SQLite table with 1 column
-        c.execute('CREATE TABLE {tn} ({nf} {ft})'\
-                .format(tn=table_name2, nf=new_field, ft=field_type_one))
-
-        # Creating a second table with 1 column and set it as PRIMARY KEY
-        # note that PRIMARY KEY column must consist of unique values!
-        # c.execute('CREATE TABLE {tn} ({nf} {ft} PRIMARY KEY)'.format(tn=table_name1, nf=new_field, ft=field_type_one))
-        c.execute("INSERT INTO {tn} ({idf}, {cn}) VALUES (123456, 'test')".format(tn=table_name2, idf=id_column, cn=column_name))
-        # Committing changes and closing the connection to the database file
-        conn.commit()
-        conn.close()
-    def jsondatabase(self, path):
-        jsonfile = open(path)
-        jsonstr = jsonfile.read()
-        test = json.loads(jsonstr)
-        p(test)
-a = SpotifyPlaylist()
-a.jsondatabase('tokens.json')
+        requestHeader = {'Authorization': 'Basic {}'.format(basicToken)}
+        requestBody = {'grant_type': 'refresh_token', 'refresh_token': refreshToken}
+        request = requests.post('https://accounts.spotify.com/api/token', headers=requestHeader, data=requestBody)
+        requestJSON = request.json()
+        newToken = requestJSON['access_token']
+    def search(self, artist=None, track=None):
+        result = self.spotipyobj.search(q="artist: {} track:{}".format(artist, track))
+        if(len(result) == 0):
+            return {}
+        return result['tracks']['items'][0]
+    def createNew(self, name, description="This is made from a bot I made!!!!!"):
+        scope = 'playlist-modify-private playlist-modify-public playlist-read-private'
+        # # token = util.prompt_for_user_token(self.username)
+        token = util.prompt_for_user_token(username=self.username, scope='playlist-modify playlist-modify-private', client_id=self.client, client_secret=self.secret)
+        # spotifyObj = spotipy.Spotify(auth=token)
+        # spotifyObj.user_playlist_create(self.username, name, public=False)
+        # print("Created a playlist!")
+        url = "https://api.spotify.com/v1/users/%s/playlists" % (self.username)
+        headers = {'Accept' : 'application/json', 'Authorization' : token, 'Content-Type' : "application/json"}
+        data = "{\"name\":\"%s\",\"public\":true}" % (name)
+        data = data.encode('UTF-8')
+        r = requests.post(url, headers=headers, data=data)
+    def addtoplaylist(self, track, play='5SgfDddDATgUpCXyEGWcuX'):
+        scope = 'playlist-modify-private playlist-modify-public'
+        token = util.prompt_for_user_token(self.username, scope)
+        spoot = spotipy.Spotify(auth=token)
+        spoot.user_playlist_add_tracks(self.username,play, track)
+apple = AppleMusic.AppleMusicPlayist("https://itunes.apple.com/us/playlist/rock-hits-2007/pl.3af683127d6b4f21bd5a2f397b044f3b")
+spot = SpotifyPlaylist()
+apple.titular = "Jared is a beast"
+for artist, track in apple.manifest.items():
+    if(len(track) > 1):
+        for item in track:
+            res = spot.search(artist, item)
+            spot.addtoplaylist(res['id'])
+    else:
+        res = spot.search(artist, track)
+    spot.addtoplaylist(res['id'])
 # a.genDatabase()
+# spot.createNew("Jared made this!")

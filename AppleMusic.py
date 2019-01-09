@@ -34,7 +34,7 @@ class AppleMusicPlayist():
             self.loadjson(cachedJSON)
         else:
             self.cachedJSON = self.title() + ".json"
-
+        # self.titular = self.title()
     # functions that do the work
     def artists(self):
         if self.sendAppleRequest and self.url != None:
